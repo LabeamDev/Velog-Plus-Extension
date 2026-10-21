@@ -1,0 +1,139 @@
+body {
+  width: 300px;
+  margin: 0;
+  padding: 14px 16px;
+  font: 13px/1.5 system-ui, sans-serif;
+  color: #212529;
+}
+
+h1 {
+  margin: 0 0 12px;
+  font-size: 16px;
+  color: #12b886;
+}
+
+h2 {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+
+section + section {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #e9ecef;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+#range {
+  flex: 1;
+  accent-color: #12b886;
+}
+
+#number {
+  width: 64px;
+}
+
+.presets {
+  display: flex;
+  gap: 4px;
+}
+
+.presets button {
+  flex: 1;
+  padding: 4px 0;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.presets button:hover {
+  border-color: #12b886;
+  color: #12b886;
+}
+
+body.off #widthOptions .row:not(:first-child),
+body.off #widthOptions .presets {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.help {
+  width: 100%;
+  padding: 7px 0;
+  border: 1px solid var(--primary, #12b886);
+  border-radius: 6px;
+  background: #fff;
+  color: #12b886;
+  font: 600 13px/1.4 system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.help:hover {
+  background: #12b886;
+  color: #fff;
+}
+
+
+h2 kbd {
+  margin-left: 4px;
+  padding: 1px 6px;
+  border: 1px solid #ced4da;
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  font: 600 11px/1.4 system-ui, sans-serif;
+  color: #495057;
+}
+
+.hint {
+  margin: 0 0 8px;
+  color: #868e96;
+  font-size: 12px;
+}
+
+.row span input[type='checkbox'] {
+  margin: 0 4px 0 0;
+  vertical-align: -2px;
+}
+
+input[type='color'] {
+  width: 44px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  background: none;
+  cursor: pointer;
+}
+
+input:disabled {
+  opacity: 0.4;
+}
+
+.sub {
+  color: #495057;
+}
+
+#hlBgAlpha {
+  flex: 1;
+  accent-color: #12b886;
+}
+
+.preview-box {
+  padding: 8px 10px;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+#hlPreview {
+  padding: 0 2px;
+}

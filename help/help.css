@@ -1,0 +1,135 @@
+:root {
+  --primary: #12b886;
+  --text1: #212529;
+  --text2: #495057;
+  --text3: #868e96;
+  --border: #e9ecef;
+  --bg-soft: #f8f9fa;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  color: var(--text1);
+  font: 16px/1.7 system-ui, -apple-system, 'Apple SD Gothic Neo', sans-serif;
+  background: #fff;
+}
+
+header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 20px 24px 12px;
+  background: rgba(255, 255, 255, 0.95);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(6px);
+}
+
+header h1 {
+  margin: 0;
+  font-size: 22px;
+  color: var(--primary);
+}
+
+.version {
+  margin: 0 0 8px;
+  color: var(--text3);
+  font-size: 13px;
+}
+
+nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+nav a {
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text2);
+  font-size: 14px;
+  text-decoration: none;
+}
+
+nav a:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+main {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 8px 24px 80px;
+}
+
+section {
+  padding-top: 32px;
+  scroll-margin-top: 110px;
+}
+
+section + section {
+  margin-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+h2 {
+  margin: 0 0 12px;
+  font-size: 24px;
+}
+
+h3 {
+  margin: 24px 0 8px;
+  font-size: 18px;
+}
+
+li + li {
+  margin-top: 4px;
+}
+
+figure {
+  margin: 20px 0;
+}
+
+figure img {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+figcaption {
+  margin-top: 6px;
+  color: var(--text3);
+  font-size: 14px;
+  text-align: center;
+}
+
+code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--bg-soft);
+  font: 14px/1.5 'SFMono-Regular', Menlo, monospace;
+}
+
+pre {
+  padding: 14px 16px;
+  border-radius: 8px;
+  background: var(--bg-soft);
+  overflow-x: auto;
+}
+
+pre code {
+  padding: 0;
+  background: none;
+}
+
+.tip {
+  padding: 10px 14px;
+  border-left: 3px solid var(--primary);
+  background: var(--bg-soft);
+  color: var(--text2);
+}
