@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Velog Plus",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "velog에서 글을 더 편하게 작성하고 읽을 수 있도록 도와주는 확장 프로그램",
   "permissions": ["storage"],
   "host_permissions": [

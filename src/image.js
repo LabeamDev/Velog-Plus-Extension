@@ -131,15 +131,19 @@
       return;
     }
     const percent = button.dataset.percent;
-    if (replaceImage(target, { width: percent ? `${percent}%` : null })) hide();
+    if (replaceImage(target, { width: percent ? `${percent}%` : null })) {
+      current.style.removeProperty('width');
+      hide();
+    }
   });
 
   handle.addEventListener('pointerdown', (e) => {
-    if (!current) return;
+    if (!current || busy) return;
     e.preventDefault();
     handle.setPointerCapture(e.pointerId);
     busy = true;
     const img = current;
+    const previousWidth = img.style.width;
     const target = locate(img);
     const startX = e.clientX;
     const startWidth = img.getBoundingClientRect().width;
@@ -147,6 +151,7 @@
     let percent = currentPercent(img);
 
     const onMove = (ev) => {
+      if (ev.pointerId !== e.pointerId) return;
       let p = ((startWidth + ev.clientX - startX) / full) * 100;
       p = Math.min(100, Math.max(5, p));
       const snap = PRESETS.find((s) => Math.abs(s - p) < 2);
@@ -155,17 +160,23 @@
       sizeLabel.textContent = `본문의 ${percent}%`;
       place();
     };
-    const onUp = () => {
-      handle.removeEventListener('pointermove', onMove);
-      handle.removeEventListener('pointerup', onUp);
-      handle.removeEventListener('pointercancel', onUp);
+    const onUp = (ev) => {
+      if (ev.pointerId !== e.pointerId) return;
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      document.removeEventListener('pointercancel', onUp);
+      handle.removeEventListener('lostpointercapture', onUp);
       busy = false;
-      replaceImage(target, { width: percent >= 100 ? '100%' : `${percent}%` });
+      // React가 재사용하는 img에 임시 width가 남으면 원문·Undo의 width 속성을 가린다.
+      img.style.width = previousWidth;
+      if (ev.type === 'pointerup' && replaceImage(target, { width: `${percent}%` })) img.style.removeProperty('width');
+      if (handle.hasPointerCapture(e.pointerId)) handle.releasePointerCapture(e.pointerId);
       hide();
     };
-    handle.addEventListener('pointermove', onMove);
-    handle.addEventListener('pointerup', onUp);
-    handle.addEventListener('pointercancel', onUp);
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+    document.addEventListener('pointercancel', onUp);
+    handle.addEventListener('lostpointercapture', onUp);
   });
 
   // ---------- 이미지 받기 ----------
