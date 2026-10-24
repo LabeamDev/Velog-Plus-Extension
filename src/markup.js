@@ -2,7 +2,7 @@
 // velog 새니타이저는 span 의 color, background-color 스타일을 허용한다.
 (function (root) {
   const SINGLE_SPAN = /^<span style="([^"]*)">((?:(?!<\/?span\b)[\s\S])*)<\/span>$/;
-  const SPAN_TOKEN = /<span style="([^"]*)">|<\/span>/g;
+  const SPAN_TOKEN = /<span(?: style="([^"]*)")?>|<\/span>/g;
   // 줄 앞의 마크다운 기호(제목, 인용, 목록, 체크박스)는 span 밖에 둔다.
   const LINE_PREFIX = /^\s*(?:(?:#{1,6}\s+|>\s?|[-*+]\s+(?:\[[ xX]\]\s+)?|\d+[.)]\s+))*/;
   const FENCE = /^\s*(```|~~~)/;
@@ -28,11 +28,11 @@
   }
 
   // 텍스트 안의 모든 짝 맞는 span 에서 prop 을 지운다. 스타일이 비면 span 자체를 벗긴다.
-  function removeProp(text, prop) {
+  function removeProp(text, prop, clearBlack = false) {
     const tokens = [];
     const stack = [];
     for (const m of text.matchAll(SPAN_TOKEN)) {
-      const token = { index: m.index, raw: m[0], style: m[1], open: m[1] !== undefined, pair: -1 };
+      const token = { index: m.index, raw: m[0], style: m[1] || '', open: m[0] !== '</span>', pair: -1 };
       tokens.push(token);
       if (token.open) stack.push(tokens.length - 1);
       else if (stack.length) {
@@ -51,6 +51,8 @@
       } else if (t.open) {
         const map = parseStyle(t.style);
         map.delete(prop);
+        // 배경 지우기 때 남은 기본 검정색도 벗겨 테마의 글자색으로 돌아간다.
+        if (clearBlack && /^(?:#000(?:000)?|black|rgb\(0,0,0\))$/i.test((map.get('color') || '').replace(/\s+/g, ''))) map.delete('color');
         t.empty = map.size === 0;
         out += t.empty ? '' : `<span style="${serializeStyle(map)}">`;
       } else {
@@ -73,7 +75,7 @@
 
   // value 가 null 이면 해당 스타일 제거, 아니면 줄마다 span 으로 감싼다.
   function applyStyle(text, prop, value) {
-    if (value == null) return removeProp(text, prop);
+    if (value == null) return removeProp(text, prop, prop === 'background-color');
     if (text === '') return wrap('', new Map([[prop, value]]));
     return text
       .split('\n')
@@ -97,7 +99,7 @@
     let end = 0;
     for (const token of text.matchAll(SPAN_TOKEN)) {
       if (!matches(text.slice(end, token.index))) return false;
-      if (token[1] !== undefined) stack.push(new Map([...stack.at(-1), ...parseStyle(token[1])]));
+      if (token[0] !== '</span>') stack.push(new Map([...stack.at(-1), ...parseStyle(token[1] || '')]));
       else if (stack.length > 1) stack.pop();
       else return false;
       end = token.index + token[0].length;

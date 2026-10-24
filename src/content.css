@@ -197,6 +197,35 @@ html.vp-dragging * {
   background: var(--bg-element2, #f1f3f5);
 }
 
+.vp-rgb-form {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.vp-rgb-form input {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  border: 1px solid var(--border3, #dee2e6);
+  border-radius: 6px;
+  background: var(--bg-element1, #fff);
+  color: inherit;
+  padding: 4px 6px;
+  font: inherit;
+}
+
+.vp-rgb-form input[aria-invalid='true'] {
+  border-color: #e03131;
+}
+
+.vp-color-hint {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--text3, #868e96);
+  min-height: 2.8em;
+}
+
 /* ---------- 이미지 크기 조절 ---------- */
 
 .vp-img-frame {

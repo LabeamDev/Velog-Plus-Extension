@@ -40,6 +40,27 @@ test('지우기: 짝이 선택 밖에 있는 태그는 그대로 둔다', () => 
   assert.strictEqual(removeProp('<span style="color: red">ab', 'color'), '<span style="color: red">ab');
 });
 
+test('배경 지우기: 검정색 잔여 스타일과 빈 span도 벗긴다', () => {
+  for (const color of ['#000000', '#000', 'black', 'rgb(0, 0, 0)']) {
+    assert.strictEqual(applyStyle(`<span style="color: ${color}; background-color: #ffff00">글</span>`, 'background-color', null), '글');
+    assert.strictEqual(applyStyle(`<span style="color: ${color}">글</span>`, 'background-color', null), '글');
+  }
+  assert.strictEqual(applyStyle('<span>글</span>', 'background-color', null), '글');
+  assert.strictEqual(removeProp('<span>글</span>', 'color'), '글');
+});
+
+test('배경 지우기: 다른 글자색과 나머지 스타일은 보존한다', () => {
+  assert.strictEqual(applyStyle('<span style="color: #e03131; background-color: #ffff00">글</span>', 'background-color', null), '<span style="color: #e03131">글</span>');
+  assert.strictEqual(applyStyle('<span style="color: #000000; background-color: #ffff00; font-weight: bold">글</span>', 'background-color', null), '<span style="font-weight: bold">글</span>');
+  assert.strictEqual(applyStyle('<span style="color: #000000">글</span>', 'background-color', '#ffff00'), '<span style="color: #000000; background-color: #ffff00">글</span>');
+});
+
+test('지우기: 중첩된 빈 span도 올바른 짝을 유지하며 정리한다', () => {
+  assert.strictEqual(applyStyle('<span style="background-color: #ffff00">앞<span>안</span>뒤</span>', 'background-color', null), '앞안뒤');
+  assert.strictEqual(removeProp('<span>앞<span style="color: red">안</span>뒤</span>', 'color'), '앞안뒤');
+  assert.strictEqual(removeProp('<span>짝 없음', 'color'), '<span>짝 없음');
+});
+
 test('내부에 같은 스타일 span 이 있으면 정리 후 감싼다', () => {
   assert.strictEqual(
     applyStyle('a <span style="color: red">b</span> c', 'color', '#1c7ed6'),

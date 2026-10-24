@@ -1,4 +1,4 @@
-// velog 에디터(/write) 툴바에 글자색·배경색 버튼을 붙이고, 강조 단축키(⌘E / Ctrl+E)를 연결한다.
+// velog 에디터(/write) 툴바에 글자색·배경색 버튼과 서식 단축키를 연결한다.
 // CodeMirror 인스턴스(.CodeMirror 요소의 CodeMirror 속성)에 접근해야 해서 MAIN world 에서 실행된다.
 (function () {
   if (window.__velogPlusEditor) return;
@@ -32,6 +32,26 @@
   const RECENT_KEY = 'velog-plus:recent';
   const RECENT_MAX = 8;
 
+  function parseColor(value) {
+    if (typeof value !== 'string') return null;
+    const text = value.trim();
+    if (/^#[\da-f]{6}$/i.test(text)) {
+      return { rgb: [1, 3, 5].map((i) => parseInt(text.slice(i, i + 2), 16)) };
+    }
+    const wrapped = text.match(/^(rgb|rgba)?\((.*)\)$/i);
+    const parts = (wrapped ? wrapped[2] : text).split(',').map((p) => p.trim());
+    const rgba = wrapped?.[1]?.toLowerCase() === 'rgba';
+    if (parts.length !== (rgba ? 4 : 3)) return null;
+    const rgb = parts.slice(0, 3);
+    if (rgb.some((p) => !/^\d{1,3}$/.test(p) || Number(p) > 255)) return null;
+    if (rgba && !/^(?:0(?:\.\d+)?|1(?:\.0+)?)$/.test(parts[3])) return null;
+    return { rgb: rgb.map(Number), alpha: rgba ? Number(parts[3]) : undefined };
+  }
+
+  function toHex({ rgb }) {
+    return '#' + rgb.map((n) => n.toString(16).padStart(2, '0')).join('');
+  }
+
   function getCM() {
     const el = document.querySelector('.CodeMirror');
     return el && el.CodeMirror;
@@ -39,28 +59,26 @@
 
   function loadRecent(kind) {
     try {
-      return JSON.parse(localStorage.getItem(RECENT_KEY))[kind] || [];
+      const values = JSON.parse(localStorage.getItem(RECENT_KEY))?.[kind];
+      return Array.isArray(values) ? values.filter((v) => parseColor(v) && CSS.supports(TOOLS[kind].prop, v)).slice(0, RECENT_MAX) : [];
     } catch {
       return [];
     }
   }
 
   function pushRecent(kind, value) {
-    let all;
     try {
-      all = JSON.parse(localStorage.getItem(RECENT_KEY)) || {};
-    } catch {
-      all = {};
-    }
-    all[kind] = [value, ...(all[kind] || []).filter((v) => v !== value)].slice(0, RECENT_MAX);
-    localStorage.setItem(RECENT_KEY, JSON.stringify(all));
+      const all = { color: loadRecent('color'), bg: loadRecent('bg') };
+      all[kind] = [value, ...all[kind].filter((v) => v !== value)].slice(0, RECENT_MAX);
+      localStorage.setItem(RECENT_KEY, JSON.stringify(all));
+    } catch { /* 저장이 차단돼도 본문 색 적용은 유지한다. */ }
   }
 
   // span 안의 일부만 선택해도 나머지 글자의 스타일은 보존한다.
   function expandToSpan(doc, from, to, partial) {
     if (from.line !== to.line) return null;
     const line = doc.getLine(from.line);
-    for (const m of line.matchAll(/(<span style="[^"]*">)((?:(?!<\/?span\b).)*)<\/span>/g)) {
+    for (const m of line.matchAll(/(<span(?: style="[^"]*")?>)((?:(?!<\/?span\b).)*)<\/span>/g)) {
       const start = m.index + m[1].length;
       const end = start + m[2].length;
       if (from.ch < start || to.ch > end) continue;
@@ -132,13 +150,20 @@
     transformSelections((text) => toggleStyles(text, highlight), true);
   }
 
-  const SHORTCUT = /Mac|iPhone|iPad/.test(navigator.platform) ? 'Cmd-E' : 'Ctrl-E';
+  const MODIFIER = /Mac|iPhone|iPad/.test(navigator.platform) ? 'Cmd' : 'Ctrl';
+  // velog는 u 태그·text-decoration을 제거하므로 허용된 span 테두리로 밑줄을 표시한다.
+  const UNDERLINE = { 'border-bottom-width': '1px', 'border-style': 'none none solid' };
 
   function ensureShortcut() {
     const cm = getCM();
     if (!cm || cm.__velogPlusShortcut) return;
     cm.__velogPlusShortcut = true;
-    cm.addKeyMap({ [SHORTCUT]: () => toggleHighlight() });
+    cm.addKeyMap({
+      [`${MODIFIER}-E`]: () => toggleHighlight(),
+      [`${MODIFIER}-B`]: () => document.querySelector('#toolbar .ql-bold')?.click(),
+      [`${MODIFIER}-I`]: () => document.querySelector('#toolbar .ql-italic')?.click(),
+      [`${MODIFIER}-U`]: () => transformSelections((text) => toggleStyles(text, UNDERLINE), true),
+    });
   }
 
   function sortPos(a, b) {
@@ -165,16 +190,31 @@
     if (e.key === 'Escape') closePopover();
   }
 
-  function swatch(kind, name, value) {
+  function swatch(kind, name, value, hint, rgb) {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'vp-swatch';
-    b.title = `${name} ${value}`;
+    const tuple = `(${parseColor(value).rgb.join(', ')})`;
+    b.title = `${name} ${tuple} · 우클릭으로 RGB 복사`;
+    b.setAttribute('aria-label', b.title);
     b.style.setProperty('--vp-swatch', value);
     if (kind === 'color') b.textContent = 'A';
     b.addEventListener('click', () => {
       apply(kind, value);
       closePopover();
+    });
+    const showRGB = () => { hint.textContent = `${tuple} · 우클릭으로 복사`; };
+    b.addEventListener('mouseenter', showRGB);
+    b.addEventListener('focus', showRGB);
+    b.addEventListener('contextmenu', async (e) => {
+      e.preventDefault();
+      try {
+        await navigator.clipboard.writeText(tuple);
+        hint.textContent = `${tuple} 복사됨`;
+      } catch {
+        rgb.value = tuple;
+        hint.textContent = `${tuple} 복사 실패. 아래 입력칸에서 직접 복사하세요.`;
+      }
     });
     return b;
   }
@@ -198,19 +238,25 @@
     title.textContent = tool.title;
     popover.append(title);
 
+    const hint = document.createElement('div');
+    hint.className = 'vp-color-hint';
+    hint.setAttribute('aria-live', 'polite');
+    hint.textContent = '색상에 마우스를 올리면 RGB · 우클릭으로 복사';
+    const rgb = document.createElement('input');
+
     const grid = document.createElement('div');
     grid.className = 'vp-swatches';
-    for (const [name, value] of tool.colors) grid.append(swatch(kind, name, value));
+    for (const [name, value] of tool.colors) grid.append(swatch(kind, name, value, hint, rgb));
     popover.append(grid);
 
-    const recent = loadRecent(kind).filter((v) => !tool.colors.some(([, c]) => c === v));
+    const recent = loadRecent(kind);
     if (recent.length) {
       const label = document.createElement('div');
       label.className = 'vp-popover-label';
       label.textContent = '최근 사용';
       const row = document.createElement('div');
       row.className = 'vp-swatches';
-      for (const value of recent) row.append(swatch(kind, '최근', value));
+      for (const value of recent) row.append(swatch(kind, '최근', value, hint, rgb));
       popover.append(label, row);
     }
 
@@ -236,7 +282,41 @@
       closePopover();
     });
     footer.append(picker, clear);
-    popover.append(footer);
+    const custom = document.createElement('form');
+    custom.className = 'vp-rgb-form';
+    rgb.type = 'text';
+    rgb.placeholder = '(255, 107, 107)';
+    rgb.setAttribute('aria-label', '직접 선택 RGB 값');
+    rgb.autocomplete = 'off';
+    const submit = document.createElement('button');
+    submit.type = 'submit';
+    submit.className = 'vp-clear';
+    submit.textContent = '적용';
+    rgb.addEventListener('input', () => {
+      rgb.setCustomValidity('');
+      rgb.removeAttribute('aria-invalid');
+      const parsed = parseColor(rgb.value);
+      if (parsed && parsed.alpha === undefined) input.value = toHex(parsed);
+    });
+    input.addEventListener('input', () => { rgb.value = toHex(parseColor(input.value)); });
+    custom.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const parsed = parseColor(rgb.value);
+      if (!parsed || parsed.alpha !== undefined) {
+        rgb.setCustomValidity('0~255 정수 세 개를 입력하세요. 예: (255, 107, 107)');
+        rgb.setAttribute('aria-invalid', 'true');
+        rgb.reportValidity();
+        return;
+      }
+      apply(kind, toHex(parsed));
+      closePopover();
+    });
+    custom.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.key === 'Escape') { e.preventDefault(); closePopover(); }
+    });
+    custom.append(rgb, submit);
+    popover.append(footer, custom, hint);
 
     document.body.append(popover);
     const rect = anchor.getBoundingClientRect();
