@@ -16,6 +16,9 @@ const HIGHLIGHT_DEFAULTS = {
   hlBgOn: true,
   hlBg: '#878378',
   hlBgAlpha: 15,
+  hlBold: false,
+  hlItalic: false,
+  hlUnderline: false,
 };
 
 function hexToRgba(hex, alphaPercent) {
@@ -23,18 +26,23 @@ function hexToRgba(hex, alphaPercent) {
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alphaPercent / 100})`;
 }
 
-function sendHighlightStyle() {
+function sendHighlightStyle(requestId) {
   chrome.storage.local.get(HIGHLIGHT_DEFAULTS, (s) => {
     const styles = {};
     if (s.hlColorOn) styles.color = s.hlColor;
     if (s.hlBgOn) styles['background-color'] = hexToRgba(s.hlBg, s.hlBgAlpha);
-    window.postMessage({ source: 'velog-plus', type: 'highlight-style', styles }, location.origin);
+    if (s.hlUnderline) {
+      styles['border-bottom-width'] = '1px';
+      styles['border-style'] = 'none none solid';
+    }
+    const formats = { bold: s.hlBold, italic: s.hlItalic };
+    window.postMessage({ source: 'velog-plus', type: 'highlight-style', styles, formats, requestId }, location.origin);
   });
 }
 
 window.addEventListener('message', (event) => {
   const data = event.data;
-  if (event.source === window && data?.source === 'velog-plus' && data.type === 'get-highlight-style') sendHighlightStyle();
+  if (event.source === window && data?.source === 'velog-plus' && data.type === 'get-highlight-style') sendHighlightStyle(data.requestId);
 });
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && Object.keys(changes).some((key) => key in HIGHLIGHT_DEFAULTS)) sendHighlightStyle();

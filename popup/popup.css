@@ -99,7 +99,7 @@ h2 kbd {
   font-size: 12px;
 }
 
-.row span input[type='checkbox'] {
+.row input[type='checkbox'] {
   margin: 0 4px 0 0;
   vertical-align: -2px;
 }

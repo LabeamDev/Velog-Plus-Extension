@@ -1,5 +1,6 @@
-// 마크다운 텍스트에 <span style="..."> 를 씌우거나 벗기는 순수 함수 모음.
-// velog 새니타이저는 span 의 color, background-color 스타일을 허용한다.
+// 마크다운 텍스트의 색상·밑줄(span)과 굵게·기울임(strong·em)을 다루는 순수 함수 모음.
+// velog 새니타이저는 span 의 color, background-color, border-bottom-width, border-style 스타일과
+// strong·em·b·i 태그를 허용한다. span 의 font-weight·font-style·text-decoration 은 지운다.
 (function (root) {
   const SINGLE_SPAN = /^<span style="([^"]*)">((?:(?!<\/?span\b)[\s\S])*)<\/span>$/;
   const SPAN_TOKEN = /<span(?: style="([^"]*)")?>|<\/span>/g;
@@ -73,57 +74,270 @@
     return wrap(removeProp(text, prop), new Map([[prop, value]]));
   }
 
-  // value 가 null 이면 해당 스타일 제거, 아니면 줄마다 span 으로 감싼다.
-  function applyStyle(text, prop, value) {
-    if (value == null) return removeProp(text, prop, prop === 'background-color');
-    if (text === '') return wrap('', new Map([[prop, value]]));
-    return text
+  // 코드 블록(``` ~~~) 밖의 연속된 줄 묶음에만 fn 을 적용한다. 닫히지 않은 블록은 끝까지 코드로 본다.
+  function mapOutsideFences(text, fn) {
+    const out = [];
+    let chunk = [];
+    let fence = null;
+    const flush = () => {
+      if (chunk.length) out.push(fn(chunk.join('\n')));
+      chunk = [];
+    };
+    for (const line of text.split('\n')) {
+      const m = line.match(FENCE);
+      if (fence) {
+        out.push(line);
+        if (m && m[1] === fence) fence = null;
+      } else if (m) {
+        flush();
+        fence = m[1];
+        out.push(line);
+      } else chunk.push(line);
+    }
+    flush();
+    return out.join('\n');
+  }
+
+  // 코드 블록 밖의 내용 있는 줄마다 접두 기호·뒤 여백을 뺀 본문에 fn 을 적용한다.
+  function mapLines(text, fn) {
+    return mapOutsideFences(text, (chunk) => chunk
       .split('\n')
       .map((line) => {
-        if (FENCE.test(line)) return line;
         const prefix = line.match(LINE_PREFIX)[0];
         const body = line.slice(prefix.length);
         if (!body.trim()) return line;
         const trailing = body.match(/\s*$/)[0];
-        const core = body.slice(0, body.length - trailing.length);
-        return prefix + styleSegment(core, prop, value) + trailing;
+        return prefix + fn(body.slice(0, body.length - trailing.length)) + trailing;
       })
-      .join('\n');
+      .join('\n'));
+  }
+
+  // value 가 null 이면 해당 스타일 제거, 아니면 줄마다 span 으로 감싼다.
+  function applyStyle(text, prop, value) {
+    if (value == null) return mapOutsideFences(text, (t) => removeProp(t, prop, prop === 'background-color'));
+    if (text === '') return wrap('', new Map([[prop, value]]));
+    return mapLines(text, (core) => styleSegment(core, prop, value));
+  }
+
+  // ---------- 인라인 서식 해석 ----------
+  // shortcut: CommonMark 전체 파서는 아니다. 복잡한 중첩 링크·강조 기호까지 지원할 때 파서로 교체한다.
+  // span·strong·b·em·i 태그 짝과 *·_ 강조(CommonMark 유사 규칙)를 찾고,
+  // 백슬래시 이스케이프·인라인 코드·링크 주소·이미지·주소 글자는 서식 기호로 보지 않는다.
+  const PUNCT = /[!-/:-@[-`{-~\p{P}\p{S}]/u;
+  const SPACE = /\s/;
+  const at = (re, line, i) => {
+    re.lastIndex = i;
+    return re.exec(line);
+  };
+  const SPAN_OPEN = /<span(?: style="([^"]*)")?>/y;
+  const SPAN_CLOSE = /<\/span>/y;
+  const FORMAT_TAG = /<(\/?)(strong|b|em|i)>/iy;
+  const AUTOLINK = /<[a-z][a-z\d+.-]*:[^\s<>]*>/iy;
+  const HTML_TAG = /<\/?[a-z][a-z\d-]*(?:\s[^<>]*)?\/?>/iy;
+  const IMAGE = /!\[[^\]]*\]\([^)]*\)/y;
+  const LINK = /\[((?:[^[\]\\]|\\.)*)\]\([^)]*\)/y;
+  const URL_TEXT = /(?:https?:\/\/|www\.)[^\s<>]*/iy;
+  const ESCAPE = /\\[!-/:-@[-`{-~]/y;
+
+  // wrappers: { kind: 'span'|'bold'|'italic', openStart, openEnd, closeStart, closeEnd, open, close, md?, style? }
+  // hidden: 서식 기호 등 보이는 글자가 아닌 위치. atoms: 중간을 자르면 안 되는 구간. broken: 짝 없는 태그.
+  function scanInline(line) {
+    const hidden = new Uint8Array(line.length);
+    const wrappers = [];
+    const atoms = [];
+    const tags = {};
+    const delims = [];
+    const links = new Map();
+    let broken = false;
+    let i = 0;
+    const atom = (end, hide = false) => {
+      atoms.push([i, end]);
+      if (hide) hidden.fill(1, i, end);
+      i = end;
+    };
+    while (i < line.length) {
+      const ch = line[i];
+      let m;
+      if (links.has(i)) atom(links.get(i), true);
+      else if (ch === '\\' && (m = at(ESCAPE, line, i))) atom(i + 2);
+      else if (ch === '`') {
+        let e = i;
+        while (line[e] === '`') e++;
+        let close = -1;
+        for (let k = line.indexOf('`', e); k >= 0; k = line.indexOf('`', k)) {
+          let ke = k;
+          while (line[ke] === '`') ke++;
+          if (ke - k === e - i) {
+            close = ke;
+            break;
+          }
+          k = ke;
+        }
+        if (close < 0) i = e;
+        else atom(close);
+      } else if (ch === '!' && (m = at(IMAGE, line, i))) atom(i + m[0].length);
+      else if (ch === '[' && (m = at(LINK, line, i))) {
+        links.set(i + 1 + m[1].length, i + m[0].length);
+        atom(i + 1, true);
+      } else if (ch === '<' && ((m = at(SPAN_OPEN, line, i)) || (m = at(SPAN_CLOSE, line, i)) || (m = at(FORMAT_TAG, line, i)))) {
+        const closing = m[0][1] === '/';
+        const name = m[2] ? m[2].toLowerCase() : 'span';
+        const stack = (tags[name] ||= []);
+        const token = { start: i, end: i + m[0].length, raw: m[0], style: name === 'span' ? m[1] || '' : '' };
+        if (!closing) stack.push(token);
+        else if (stack.length) {
+          const o = stack.pop();
+          wrappers.push({
+            kind: name === 'span' ? 'span' : /^(?:strong|b)$/.test(name) ? 'bold' : 'italic',
+            openStart: o.start, openEnd: o.end, closeStart: token.start, closeEnd: token.end, open: o.raw, close: token.raw, style: o.style,
+          });
+        } else broken = true;
+        atom(token.end, true);
+      } else if (ch === '<' && (m = at(AUTOLINK, line, i))) atom(i + m[0].length);
+      else if (ch === '<' && (m = at(HTML_TAG, line, i))) atom(i + m[0].length, !/^<img\b/i.test(m[0]));
+      else if (/[hw]/i.test(ch) && !/[\p{L}\p{N}]/u.test(line[i - 1] || '') && (m = at(URL_TEXT, line, i))) atom(i + m[0].length);
+      else if (ch === '*' || ch === '_') {
+        let e = i;
+        while (line[e] === ch) e++;
+        const prev = line[i - 1] || ' ';
+        const next = line[e] || ' ';
+        const left = !SPACE.test(next) && (!PUNCT.test(next) || SPACE.test(prev) || PUNCT.test(prev));
+        const right = !SPACE.test(prev) && (!PUNCT.test(prev) || SPACE.test(next) || PUNCT.test(next));
+        const canOpen = ch === '*' ? left : left && (!right || PUNCT.test(prev));
+        const canClose = ch === '*' ? right : right && (!left || PUNCT.test(next));
+        let s = i;
+        // 가장 가까운 같은 기호의 여는 묶음과 2개(굵게)·1개(기울임)씩 짝짓는다. 사이의 여는 기호는 글자로 남는다.
+        for (let j = delims.length - 1; canClose && j >= 0 && s < e; j--) {
+          const o = delims[j];
+          if (o.ch !== ch) continue;
+          while (s < e && o.end > o.start) {
+            const use = e - s >= 2 && o.end - o.start >= 2 ? 2 : 1;
+            o.end -= use;
+            const raw = ch.repeat(use);
+            wrappers.push({ kind: use === 2 ? 'bold' : 'italic', md: ch, openStart: o.end, openEnd: o.end + use, closeStart: s, closeEnd: s + use, open: raw, close: raw });
+            s += use;
+          }
+          delims.length = o.end > o.start ? j + 1 : j;
+        }
+        if (s < e && canOpen) delims.push({ ch, start: s, end: e });
+        i = e;
+      } else i++;
+    }
+    for (const stack of Object.values(tags)) if (stack.length) broken = true;
+    for (const w of wrappers) {
+      if (!w.md) continue;
+      hidden.fill(1, w.openStart, w.openEnd);
+      hidden.fill(1, w.closeStart, w.closeEnd);
+      atoms.push([w.openStart, w.openEnd], [w.closeStart, w.closeEnd]);
+    }
+    return { wrappers, hidden, atoms, broken };
+  }
+
+  // kind('bold'|'italic') 서식의 짝 맞는 태그·마크다운 기호를 지운다. 글자와 다른 서식은 남긴다.
+  function removeFormat(line, kind) {
+    const cuts = scanInline(line).wrappers
+      .filter((w) => w.kind === kind)
+      .flatMap((w) => [[w.openStart, w.openEnd], [w.closeStart, w.closeEnd]])
+      .sort((a, b) => b[0] - a[0]);
+    return cuts.reduce((out, [s, e]) => out.slice(0, s) + out.slice(e), line);
   }
 
   const normalize = (value) => String(value).replace(/\s+/g, '').toLowerCase();
 
-  function hasStyles(text, entries) {
-    const stack = [new Map()];
-    const matches = (part) => !part.trim() || entries.every(([prop, value]) => normalize(stack.at(-1).get(prop) || '') === normalize(value));
-    let end = 0;
-    for (const token of text.matchAll(SPAN_TOKEN)) {
-      if (!matches(text.slice(end, token.index))) return false;
-      if (token[0] !== '</span>') stack.push(new Map([...stack.at(-1), ...parseStyle(token[1] || '')]));
-      else if (stack.length > 1) stack.pop();
-      else return false;
-      end = token.index + token[0].length;
+  // 본문의 보이는 글자가 모두 지정 스타일·서식이면 true, 하나라도 아니면 false, 보이는 글자가 없으면 null.
+  function lineHighlighted(body, entries, bold, italic) {
+    const { wrappers, hidden, broken } = scanInline(body);
+    if (broken) return false;
+    const spans = wrappers.filter((w) => w.kind === 'span').sort((a, b) => a.openStart - b.openStart);
+    const inside = (w, p) => w.openEnd <= p && p < w.closeStart;
+    let seen = null;
+    for (let p = 0; p < body.length; p++) {
+      if (hidden[p] || SPACE.test(body[p])) continue;
+      seen = true;
+      if (bold && !wrappers.some((w) => w.kind === 'bold' && inside(w, p))) return false;
+      if (italic && !wrappers.some((w) => w.kind === 'italic' && inside(w, p))) return false;
+      if (!entries.length) continue;
+      const style = new Map(spans.filter((w) => inside(w, p)).flatMap((w) => [...parseStyle(w.style)]));
+      if (!entries.every(([prop, value]) => normalize(style.get(prop) || '') === normalize(value))) return false;
     }
-    return stack.length === 1 && matches(text.slice(end));
+    return seen;
   }
 
-  // 여러 스타일을 한 번에 켜고 끈다. (강조 단축키용)
-  // 내용이 있는 모든 줄이 지정 스타일이면 해제한다. 마크다운 접두 기호와 여백은 판정에서 뺀다.
+  // 선택 전체의 보이는 글자에 켠 스타일·서식이 모두 있는지. 코드 블록·접두 기호·여백은 판정에서 뺀다.
+  function isHighlighted(text, styles, formats = {}) {
+    const entries = Object.entries(styles || {});
+    const bold = formats?.bold === true;
+    const italic = formats?.italic === true;
+    let seen = null;
+    mapOutsideFences(text, (chunk) => {
+      const core = chunk.split('\n').map((line) => line.slice(line.match(LINE_PREFIX)[0].length)).join('\n');
+      const r = seen === false ? null : lineHighlighted(core, entries, bold, italic);
+      if (r !== null) seen = r;
+      return chunk;
+    });
+    return seen;
+  }
+
+  function formatSegment(core, entries, bold, italic) {
+    let text = core;
+    if (bold) text = removeFormat(text, 'bold');
+    if (italic) text = removeFormat(text, 'italic');
+    const open = (bold ? '<strong>' : '') + (italic ? '<em>' : '');
+    const close = (italic ? '</em>' : '') + (bold ? '</strong>' : '');
+    const m = text.match(SINGLE_SPAN);
+    if (m) {
+      const map = parseStyle(m[1]);
+      for (const [prop, value] of entries) {
+        map.delete(prop);
+        map.set(prop, value);
+      }
+      return wrap(open + m[2] + close, map);
+    }
+    for (const [prop] of entries) text = removeProp(text, prop);
+    return wrap(open + text + close, new Map(entries));
+  }
+
+  // 강조 단축키: 켠 스타일(span)과 굵게·기울임(strong·em)을 한 번에 켜고 끈다.
+  // 선택의 보이는 글자 전체에 켠 항목이 모두 있으면 모두 해제, 아니면 모두 적용한다. 끈 항목·다른 서식은 보존한다.
+  // on 을 주면 판정 없이 적용(true)·해제(false)한다. 여러 선택을 함께 판정할 때 쓴다.
+  // velog 는 span 의 font-weight·font-style 을 지우므로 굵게·기울임은 태그로 넣는다.
+  function toggleHighlight(text, styles, formats = {}, on) {
+    const entries = Object.entries(styles || {});
+    const bold = formats?.bold === true;
+    const italic = formats?.italic === true;
+    if ((!entries.length && !bold && !italic) || !text.trim()) return text;
+    if (on === undefined) on = !isHighlighted(text, styles, formats);
+    if (on && !bold && !italic) return entries.reduce((out, [prop, value]) => applyStyle(out, prop, value), text);
+    if (on) return mapOutsideFences(text, (chunk) => {
+      if (bold) chunk = removeFormat(chunk, 'bold');
+      if (italic) chunk = removeFormat(chunk, 'italic');
+      return mapLines(chunk, (core) => formatSegment(core, entries, bold, italic));
+    });
+    const out = entries.reduce((acc, [prop]) => mapOutsideFences(acc, (t) => removeProp(t, prop)), text);
+    if (!bold && !italic) return out;
+    return mapOutsideFences(out, (chunk) => {
+      if (bold) chunk = removeFormat(chunk, 'bold');
+      return italic ? removeFormat(chunk, 'italic') : chunk;
+    });
+  }
+
+  // 여러 스타일을 한 번에 켜고 끈다. (밑줄 단축키용) 굵게·기울임 없는 toggleHighlight 와 같다.
   function toggleStyles(text, styles) {
-    const entries = Object.entries(styles);
-    if (!entries.length || !text.trim()) return text;
-    const lines = text.split('\n').filter((line) => !FENCE.test(line) && line.slice(line.match(LINE_PREFIX)[0].length).trim());
-    const active = lines.length && lines.every((line) => hasStyles(line.slice(line.match(LINE_PREFIX)[0].length), entries));
-    if (active) return entries.reduce((out, [prop]) => removeProp(out, prop), text);
-    return entries.reduce((out, [prop, value]) => applyStyle(out, prop, value), text);
+    return toggleHighlight(text, styles);
   }
 
-  // 결과 문자열에서 span 안쪽 글자의 [시작, 끝] 오프셋. 한 줄짜리 결과에만 쓴다.
+  // 결과 문자열에서 바깥 서식(span·strong·em·** 등)을 벗긴 안쪽 글자의 [시작, 끝] 오프셋.
+  // 한 줄 결과가 서식 하나로 통째로 감싸였을 때만 값을 준다.
   function innerRange(out) {
-    const m = out.match(/^([^<]*)(<span style="[^"]*">)((?:(?!<\/?span\b)[\s\S])*)<\/span>(\s*)$/);
-    if (!m) return null;
-    const start = m[1].length + m[2].length;
-    return [start, start + m[3].length];
+    if (out.includes('\n')) return null;
+    let s = out.match(LINE_PREFIX)[0].length;
+    let e = out.length - out.match(/\s*$/)[0].length;
+    const { wrappers } = scanInline(out);
+    let found = false;
+    for (let w; (w = wrappers.find((x) => x.openStart === s && x.closeEnd === e));) {
+      [s, e, found] = [w.openEnd, w.closeStart, true];
+    }
+    return found ? [s, e] : null;
   }
 
   // ---------- 이미지 ----------
@@ -226,6 +440,9 @@
     removeProp,
     applyStyle,
     toggleStyles,
+    toggleHighlight,
+    isHighlighted,
+    scanInline,
     innerRange,
     findImages,
     findImageBySrc,

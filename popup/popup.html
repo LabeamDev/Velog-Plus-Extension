@@ -29,7 +29,7 @@
 
     <section>
       <h2>강조 단축키 <kbd id="shortcut">⌘E</kbd></h2>
-      <p class="hint">글쓰기 화면에서 글자를 선택하고 누르면 아래 스타일이 적용되고, 다시 누르면 풀립니다.</p>
+      <p class="hint">선택한 글자에 켜 둔 스타일이 모두 적용돼 있으면 해제하고, 하나라도 빠져 있으면 모두 적용합니다.</p>
 
       <label class="row">
         <span><input id="hlColorOn" type="checkbox" /> 글자색</span>
@@ -45,6 +45,12 @@
         <label class="sub" for="hlBgAlpha">배경 불투명도</label>
         <input id="hlBgAlpha" type="range" min="5" max="100" step="5" />
         <span id="hlBgAlphaValue" class="unit"></span>
+      </div>
+
+      <div class="row">
+        <label><input id="hlBold" type="checkbox" /> 굵게</label>
+        <label><input id="hlItalic" type="checkbox" /> 기울임</label>
+        <label><input id="hlUnderline" type="checkbox" /> 밑줄</label>
       </div>
 
       <div class="preview-box">

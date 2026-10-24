@@ -113,3 +113,46 @@ test('변경 확정으로 마지막 강조 스타일을 끄면 기존 스타일�
   assert.equal(stored.hlBgOn, true);
   assert.equal(element('hlBgOn').checked, true);
 });
+
+for (const event of ['input', 'change']) {
+  test(`굵게·기울임·밑줄은 ${event}로 저장되고 색상 없이도 사용할 수 있다`, () => {
+    const { element, stored } = popup();
+    for (const key of ['hlBold', 'hlItalic', 'hlUnderline']) {
+      assert.equal(element(key).checked, false);
+      element(key).checked = true;
+      element(key).fire(event);
+    }
+    for (const key of ['hlColorOn', 'hlBgOn']) {
+      element(key).checked = false;
+      element(key).fire(event);
+    }
+    const reopened = popup(stored).element;
+    for (const key of ['hlBold', 'hlItalic', 'hlUnderline']) assert.equal(reopened(key).checked, true);
+    for (const key of ['hlColorOn', 'hlBgOn']) assert.equal(reopened(key).checked, false);
+    assert.equal(reopened('hlPreview').style.fontWeight, 'bold');
+    assert.equal(reopened('hlPreview').style.fontStyle, 'italic');
+    assert.equal(reopened('hlPreview').style.borderBottomWidth, '1px');
+    assert.equal(reopened('hlPreview').style.borderStyle, 'none none solid');
+    assert.equal(reopened('hlPreview').style.color, '');
+    assert.equal(reopened('hlPreview').style.backgroundColor, '');
+  });
+}
+
+test('굵게·기울임·밑줄 중 마지막 옵션은 끌 수 없고 꺼진 옵션은 미리보기에서 빠진다', () => {
+  for (const key of ['hlBold', 'hlItalic', 'hlUnderline']) {
+    const { element, stored } = popup({ hlColorOn: false, hlBgOn: false, [key]: true });
+    element(key).checked = false;
+    element(key).fire('change');
+    assert.equal(element(key).checked, true);
+    assert.equal(stored[key], true);
+    element('hlColorOn').checked = true;
+    element('hlColorOn').fire('change');
+    element(key).checked = false;
+    element(key).fire('change');
+    const style = element('hlPreview').style;
+    assert.equal(style.fontWeight, '');
+    assert.equal(style.fontStyle, '');
+    assert.equal(style.borderBottomWidth, '');
+    assert.equal(style.borderStyle, '');
+  }
+});

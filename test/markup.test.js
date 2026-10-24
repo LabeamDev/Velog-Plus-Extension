@@ -204,3 +204,92 @@ test('강조 토글: 안쪽 글자의 색이 다르면 해제 대신 현재 강�
   const on = toggleStyles(before, { color: HL.color });
   assert.strictEqual(on, '<span style="color: #eb5757">앞 중요</span>');
 });
+
+const { toggleHighlight, isHighlighted } = require('../src/markup.js');
+const UL = { 'border-bottom-width': '1px', 'border-style': 'none none solid' };
+const ALL5 = { ...HL, ...UL };
+const BI = { bold: true, italic: true };
+const ALL5_SPAN = '<span style="color: #eb5757; background-color: rgba(135, 131, 120, 0.15); border-bottom-width: 1px; border-style: none none solid">';
+
+test('강조 B·I: 5개 모두 켜면 일부만 굵은 선택에도 전부 적용하고, 다시 누르면 전부 뺀다', () => {
+  const on = toggleHighlight('a **b** c', ALL5, BI);
+  assert.strictEqual(on, `${ALL5_SPAN}<strong><em>a b c</em></strong></span>`);
+  assert.strictEqual(isHighlighted(on, ALL5, BI), true);
+  assert.strictEqual(toggleHighlight(on, ALL5, BI), 'a b c');
+});
+
+test('강조 B·I: 하나라도 빠진 부분이 있으면 해제하지 않고 모든 항목을 적용한다', () => {
+  // 색·굵게는 있지만 기울임이 없다.
+  const partial = '<span style="color: #eb5757"><strong>a</strong></span>';
+  assert.strictEqual(toggleHighlight(partial, { color: HL.color }, BI), '<span style="color: #eb5757"><strong><em>a</em></strong></span>');
+  // 굵게·기울임은 다 있지만 색이 없다.
+  assert.strictEqual(toggleHighlight('<strong><em>a</em></strong>', { color: HL.color }, BI), '<span style="color: #eb5757"><strong><em>a</em></strong></span>');
+});
+
+test('강조 B·I·U만 켜면 색은 건드리지 않고 기존 색·다른 스타일을 보존한다', () => {
+  const before = '<span style="color: #1c7ed6; text-align: center">파랑</span>';
+  const on = toggleHighlight(before, UL, BI);
+  assert.strictEqual(on, '<span style="color: #1c7ed6; text-align: center; border-bottom-width: 1px; border-style: none none solid"><strong><em>파랑</em></strong></span>');
+  assert.strictEqual(toggleHighlight(on, UL, BI), before);
+});
+
+test('강조 B·I: 기존 마크다운 굵게·기울임(** __ * _ ***)을 판정하고 켠 서식만 벗긴다', () => {
+  assert.strictEqual(toggleHighlight('**굵게** __굵게__', {}, { bold: true }), '굵게 굵게');
+  assert.strictEqual(toggleHighlight('*기울임* _기울임_', {}, { italic: true }), '기울임 기울임');
+  assert.strictEqual(toggleHighlight('***둘다***', {}, { bold: true }), '*둘다*');
+  assert.strictEqual(toggleHighlight('***둘다***', {}, { italic: true }), '**둘다**');
+  assert.strictEqual(toggleHighlight('***둘다***', {}, BI), '둘다');
+  assert.strictEqual(toggleHighlight('*바깥 **안쪽** 끝*', {}, BI), '<strong><em>바깥 안쪽 끝</em></strong>');
+});
+
+test('강조 B·I: 끈 서식은 보존하고 기울임만 토글한다', () => {
+  const on = toggleHighlight('a **b** c', {}, { italic: true });
+  assert.strictEqual(on, '<em>a **b** c</em>');
+  assert.strictEqual(toggleHighlight(on, {}, { italic: true }), 'a **b** c');
+});
+
+test('강조 B·I: 이스케이프·인라인 코드·링크 주소·단어 속 _ 는 서식 기호로 보지 않는다', () => {
+  for (const text of ['\\*글자\\*', '`a*b*c`', 'my_var_name', '[링크](https://x.io/a_b_c*d*)']) {
+    const on = toggleHighlight(text, {}, { italic: true });
+    assert.strictEqual(on, `<em>${text}</em>`);
+    assert.strictEqual(toggleHighlight(on, {}, { italic: true }), text);
+  }
+  assert.strictEqual(toggleHighlight('[*링크*](https://x.io/a_b)', {}, { italic: true }), '[링크](https://x.io/a_b)');
+});
+
+test('강조 B·I: 여러 줄의 접두 기호·여백·코드 블록을 보존하고 섞인 줄은 모두 적용한다', () => {
+  const before = '# **제목**\n\n- *항목*  \n```\n**코드**\n```\n끝';
+  const on = toggleHighlight(before, UL, BI);
+  assert.strictEqual(on.split('\n')[4], '**코드**');
+  assert.match(on, /^# <span[^>]*><strong><em>제목<\/em><\/strong><\/span>\n\n- <span[^>]*><strong><em>항목<\/em><\/strong><\/span> {2}\n/);
+  assert.strictEqual(toggleHighlight(on, UL, BI), '# 제목\n\n- 항목  \n```\n**코드**\n```\n끝');
+});
+
+test('기존 단축키가 여러 줄에 걸쳐 넣은 굵게·기울임도 전체 적용·해제한다', () => {
+  for (const before of ['**첫 줄\n둘째 줄**', '<strong>첫 줄\n둘째 줄</strong>']) {
+    assert.strictEqual(toggleHighlight(before, {}, { bold: true }), '첫 줄\n둘째 줄');
+    const on = toggleHighlight(before, UL, BI);
+    assert.strictEqual(on, '<span style="border-bottom-width: 1px; border-style: none none solid"><strong><em>첫 줄</em></strong></span>\n<span style="border-bottom-width: 1px; border-style: none none solid"><strong><em>둘째 줄</em></strong></span>');
+    assert.strictEqual(toggleHighlight(on, UL, BI), '첫 줄\n둘째 줄');
+  }
+  assert.strictEqual(toggleHighlight('***첫 줄\n둘째 줄***', {}, BI), '첫 줄\n둘째 줄');
+});
+
+test('강조 B·I: on 을 주면 판정 없이 적용·해제하고 빈 선택·끈 설정은 그대로 둔다', () => {
+  assert.strictEqual(toggleHighlight('**a**', {}, { bold: true }, true), '<strong>a</strong>');
+  assert.strictEqual(toggleHighlight('a', {}, { bold: true }, false), 'a');
+  for (const text of ['', '  \n']) assert.strictEqual(toggleHighlight(text, ALL5, BI), text);
+  assert.strictEqual(toggleHighlight('a', {}, {}), 'a');
+  assert.strictEqual(toggleHighlight('a', {}, { bold: 'true' }), 'a');
+});
+
+test('강조 토글: 바깥 굵게 태그 안의 강조 span 도 해제로 판정한다', () => {
+  assert.strictEqual(toggleStyles('<strong><span style="color: #eb5757">a</span></strong>', { color: HL.color }), '<strong>a</strong>');
+});
+
+test('innerRange 는 겹친 서식을 모두 벗긴 안쪽 글자를 준다', () => {
+  const out = '- <span style="color: red"><strong><em>항목</em></strong></span>  ';
+  const [s, e] = innerRange(out);
+  assert.strictEqual(out.slice(s, e), '항목');
+  assert.strictEqual(innerRange('a\n<span style="color: red">b</span>'), null);
+});

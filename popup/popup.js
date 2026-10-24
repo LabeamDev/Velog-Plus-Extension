@@ -41,7 +41,7 @@ document.getElementById('help').addEventListener('click', () => {
 
 // ---------- 강조 단축키 스타일 ----------
 
-const HIGHLIGHT_DEFAULTS = { hlColorOn: true, hlColor: '#eb5757', hlBgOn: true, hlBg: '#878378', hlBgAlpha: 15 };
+const HIGHLIGHT_DEFAULTS = { hlColorOn: true, hlColor: '#eb5757', hlBgOn: true, hlBg: '#878378', hlBgAlpha: 15, hlBold: false, hlItalic: false, hlUnderline: false };
 const hl = Object.fromEntries(Object.keys(HIGHLIGHT_DEFAULTS).map((key) => [key, document.getElementById(key)]));
 const preview = document.getElementById('hlPreview');
 const alphaValue = document.getElementById('hlBgAlphaValue');
@@ -60,6 +60,9 @@ function readHighlight() {
     hlBgOn: hl.hlBgOn.checked,
     hlBg: hl.hlBg.value,
     hlBgAlpha: Number(hl.hlBgAlpha.value),
+    hlBold: hl.hlBold.checked,
+    hlItalic: hl.hlItalic.checked,
+    hlUnderline: hl.hlUnderline.checked,
   };
 }
 
@@ -69,12 +72,19 @@ function showHighlight(s) {
   hl.hlBgOn.checked = s.hlBgOn;
   hl.hlBg.value = s.hlBg;
   hl.hlBgAlpha.value = s.hlBgAlpha;
+  hl.hlBold.checked = s.hlBold;
+  hl.hlItalic.checked = s.hlItalic;
+  hl.hlUnderline.checked = s.hlUnderline;
   alphaValue.textContent = `${s.hlBgAlpha}%`;
   hl.hlColor.disabled = !s.hlColorOn;
   hl.hlBg.disabled = !s.hlBgOn;
   hl.hlBgAlpha.disabled = !s.hlBgOn;
   preview.style.color = s.hlColorOn ? s.hlColor : '';
   preview.style.backgroundColor = s.hlBgOn ? hexToRgba(s.hlBg, s.hlBgAlpha) : '';
+  preview.style.fontWeight = s.hlBold ? 'bold' : '';
+  preview.style.fontStyle = s.hlItalic ? 'italic' : '';
+  preview.style.borderBottomWidth = s.hlUnderline ? '1px' : '';
+  preview.style.borderStyle = s.hlUnderline ? 'none none solid' : '';
 }
 
 chrome.storage.local.get(HIGHLIGHT_DEFAULTS, showHighlight);
@@ -82,8 +92,8 @@ chrome.storage.local.get(HIGHLIGHT_DEFAULTS, showHighlight);
 for (const el of Object.values(hl)) {
   const saveHighlight = () => {
     let s = readHighlight();
-    // 둘 다 끄면 단축키가 할 일이 없으므로 방금 끈 것을 다시 켠다.
-    if (!s.hlColorOn && !s.hlBgOn) {
+    // 마지막 스타일은 켜 두어 단축키가 할 일 없는 설정을 막는다.
+    if (![s.hlColorOn, s.hlBgOn, s.hlBold, s.hlItalic, s.hlUnderline].some(Boolean)) {
       el.checked = true;
       s = readHighlight();
     }
