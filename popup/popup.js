@@ -80,7 +80,7 @@ function showHighlight(s) {
 chrome.storage.local.get(HIGHLIGHT_DEFAULTS, showHighlight);
 
 for (const el of Object.values(hl)) {
-  el.addEventListener('input', () => {
+  const saveHighlight = () => {
     let s = readHighlight();
     // 둘 다 끄면 단축키가 할 일이 없으므로 방금 끈 것을 다시 켠다.
     if (!s.hlColorOn && !s.hlBgOn) {
@@ -89,5 +89,7 @@ for (const el of Object.values(hl)) {
     }
     showHighlight(s);
     chrome.storage.local.set(s);
-  });
+  };
+  el.addEventListener('input', saveHighlight);
+  el.addEventListener('change', saveHighlight);
 }

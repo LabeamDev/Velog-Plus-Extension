@@ -4,9 +4,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-function popup() {
+function popup(stored = { enabled: true, width: 1024 }) {
   const elements = new Map();
-  const stored = { enabled: true, width: 1024 };
   const element = (id) => {
     if (!elements.has(id)) {
       let value = '';
@@ -17,7 +16,7 @@ function popup() {
         get valueAsNumber() { return value === '' ? NaN : Number(value); },
         style: {},
         addEventListener(type, fn) { listeners[type] = fn; },
-        fire(type) { listeners[type](); },
+        fire(type) { listeners[type]?.(); },
       });
     }
     return elements.get(id);
@@ -34,7 +33,7 @@ function popup() {
       set(patch) { Object.assign(stored, patch); },
     } } },
   });
-  return { number: element('number'), range: element('range'), stored };
+  return { number: element('number'), range: element('range'), element, stored };
 }
 
 test('폭 숫자는 blur·Enter 없이 입력 즉시 저장한다', () => {
@@ -73,4 +72,44 @@ test('입력을 마치면 범위 밖 숫자를 보정한다', () => {
   number.fire('change');
   assert.equal(stored.width, 2400);
   assert.equal(number.value, '2400');
+});
+
+for (const event of ['input', 'change']) {
+  test(`강조 설정은 ${event} 후 팝업을 다시 열어도 유지한다`, () => {
+    const { element, stored } = popup();
+    for (const [id, value] of [['hlColor', '#123456'], ['hlBg', '#abcdef'], ['hlBgAlpha', '65']]) {
+      element(id).value = value;
+      element(id).fire(event);
+      assert.equal(stored[id], id === 'hlBgAlpha' ? Number(value) : value);
+    }
+    element('hlColorOn').checked = false;
+    element('hlColorOn').fire(event);
+
+    assert.equal(stored.hlColor, '#123456');
+    assert.equal(stored.hlBg, '#abcdef');
+    assert.equal(stored.hlBgAlpha, 65);
+    assert.equal(stored.hlColorOn, false);
+    assert.equal(stored.hlBgOn, true);
+
+    const reopened = popup(stored).element;
+    assert.equal(reopened('hlColor').value, '#123456');
+    assert.equal(reopened('hlBg').value, '#abcdef');
+    assert.equal(reopened('hlBgAlpha').value, '65');
+    assert.equal(reopened('hlBgAlphaValue').textContent, '65%');
+    assert.equal(reopened('hlColorOn').checked, false);
+    assert.equal(reopened('hlColor').disabled, true);
+    assert.equal(reopened('hlPreview').style.backgroundColor, 'rgba(171, 205, 239, 0.65)');
+    assert.equal(reopened('hlPreview').style.color, '');
+  });
+}
+
+test('변경 확정으로 마지막 강조 스타일을 끄면 기존 스타일을 유지한다', () => {
+  const { element, stored } = popup();
+  element('hlColorOn').checked = false;
+  element('hlColorOn').fire('change');
+  element('hlBgOn').checked = false;
+  element('hlBgOn').fire('change');
+  assert.equal(stored.hlColorOn, false);
+  assert.equal(stored.hlBgOn, true);
+  assert.equal(element('hlBgOn').checked, true);
 });
