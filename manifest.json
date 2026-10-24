@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Velog Plus",
-  "version": "0.6.0",
-  "description": "velog 본문 폭 조절, 에디터 글자색·배경색, 이미지 크기 조절·자르기·합치기, 마크다운 불러오기",
+  "version": "0.6.1",
+  "description": "velog에서 글을 더 편하게 작성하고 읽을 수 있도록 도와주는 확장 프로그램",
   "permissions": ["storage"],
   "host_permissions": [
     "https://velog.velcdn.com/*",
