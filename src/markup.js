@@ -243,23 +243,24 @@
   }
 
   const normalize = (value) => String(value).replace(/\s+/g, '').toLowerCase();
+  const HIGHLIGHT_PROPS = ['color', 'background-color', 'border-bottom-width', 'border-style'];
 
   // 본문의 보이는 글자가 모두 지정 스타일·서식이면 true, 하나라도 아니면 false, 보이는 글자가 없으면 null.
-  function lineHighlighted(body, entries, bold, italic, resetFormats) {
+  function lineHighlighted(body, entries, bold, italic, resetOptions) {
     const { wrappers, hidden, broken } = scanInline(body);
     if (broken) return false;
     const spans = wrappers.filter((w) => w.kind === 'span').sort((a, b) => a.openStart - b.openStart);
     const inside = (w, p) => w.openEnd <= p && p < w.closeStart;
-    const underlineOn = entries.some(([prop]) => prop === 'border-bottom-width');
+    const inactiveProps = resetOptions ? HIGHLIGHT_PROPS.filter((prop) => !entries.some(([key]) => key === prop)) : [];
     let seen = null;
     for (let p = 0; p < body.length; p++) {
       if (hidden[p] || SPACE.test(body[p])) continue;
       seen = true;
-      if ((bold || resetFormats) && bold !== wrappers.some((w) => w.kind === 'bold' && inside(w, p))) return false;
-      if ((italic || resetFormats) && italic !== wrappers.some((w) => w.kind === 'italic' && inside(w, p))) return false;
-      if (!entries.length && !resetFormats) continue;
+      if ((bold || resetOptions) && bold !== wrappers.some((w) => w.kind === 'bold' && inside(w, p))) return false;
+      if ((italic || resetOptions) && italic !== wrappers.some((w) => w.kind === 'italic' && inside(w, p))) return false;
+      if (!entries.length && !resetOptions) continue;
       const style = new Map(spans.filter((w) => inside(w, p)).flatMap((w) => [...parseStyle(w.style)]));
-      if (resetFormats && !underlineOn && (style.has('border-bottom-width') || style.has('border-style'))) return false;
+      if (inactiveProps.some((prop) => style.has(prop))) return false;
       if (!entries.every(([prop, value]) => normalize(style.get(prop) || '') === normalize(value))) return false;
     }
     return seen;
@@ -270,11 +271,11 @@
     const entries = Object.entries(styles || {});
     const bold = formats?.bold === true;
     const italic = formats?.italic === true;
-    const resetFormats = typeof formats?.bold === 'boolean' || typeof formats?.italic === 'boolean';
+    const resetOptions = typeof formats?.bold === 'boolean' || typeof formats?.italic === 'boolean';
     let seen = null;
     mapOutsideFences(text, (chunk) => {
       const core = chunk.split('\n').map((line) => line.slice(line.match(LINE_PREFIX)[0].length)).join('\n');
-      const r = seen === false ? null : lineHighlighted(core, entries, bold, italic, resetFormats);
+      const r = seen === false ? null : lineHighlighted(core, entries, bold, italic, resetOptions);
       if (r !== null) seen = r;
       return chunk;
     });
@@ -301,7 +302,7 @@
   }
 
   // 강조 단축키: 켠 스타일(span)과 굵게·기울임(strong·em)을 한 번에 켜고 끈다.
-  // 선택 전체가 설정과 같으면 해제, 다르면 적용한다. 굵게·기울임 옵션을 받으면 꺼진 B·I·U도 지운다.
+  // 선택 전체가 설정과 같으면 해제, 다르면 적용한다. 강조 옵션을 받으면 꺼진 색·배경·B·I·U도 지운다.
   // on 을 주면 판정 없이 적용(true)·해제(false)한다. 여러 선택을 함께 판정할 때 쓴다.
   // velog 는 span 의 font-weight·font-style 을 지우므로 굵게·기울임은 태그로 넣는다.
   function toggleHighlight(text, styles, formats = {}, on) {
@@ -314,9 +315,7 @@
       text = mapOutsideFences(text, (chunk) => {
         if (!bold) chunk = removeFormat(chunk, 'bold');
         if (!italic) chunk = removeFormat(chunk, 'italic');
-        if (!entries.some(([prop]) => prop === 'border-bottom-width')) {
-          chunk = removeProp(removeProp(chunk, 'border-bottom-width'), 'border-style');
-        }
+        for (const prop of HIGHLIGHT_PROPS) if (!entries.some(([key]) => key === prop)) chunk = removeProp(chunk, prop);
         return chunk;
       });
     }

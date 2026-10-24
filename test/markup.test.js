@@ -226,11 +226,11 @@ test('강조 B·I: 하나라도 빠진 부분이 있으면 해제하지 않고 �
   assert.strictEqual(toggleHighlight('<strong><em>a</em></strong>', { color: HL.color }, BI), '<span style="color: #eb5757"><strong><em>a</em></strong></span>');
 });
 
-test('강조 B·I·U만 켜면 색은 건드리지 않고 기존 색·다른 스타일을 보존한다', () => {
+test('강조 B·I·U만 켜면 꺼진 색은 지우고 다른 스타일을 보존한다', () => {
   const before = '<span style="color: #1c7ed6; text-align: center">파랑</span>';
   const on = toggleHighlight(before, UL, BI);
-  assert.strictEqual(on, '<span style="color: #1c7ed6; text-align: center; border-bottom-width: 1px; border-style: none none solid"><strong><em>파랑</em></strong></span>');
-  assert.strictEqual(toggleHighlight(on, UL, BI), before);
+  assert.strictEqual(on, '<span style="text-align: center; border-bottom-width: 1px; border-style: none none solid"><strong><em>파랑</em></strong></span>');
+  assert.strictEqual(toggleHighlight(on, UL, BI), '<span style="text-align: center">파랑</span>');
 });
 
 test('강조 B·I: 기존 마크다운 굵게·기울임을 판정하고 체크한 서식만 남긴다', () => {
@@ -257,13 +257,13 @@ test('기존 5개 강조에서 기울임·밑줄을 끄면 굵게와 색만 남�
   assert.strictEqual(toggleHighlight(on, HL, formats), '중요');
 });
 
-test('굵게·기울임·밑줄을 모두 끄면 기존 서식을 지우며 꺼 둔 색상과 다른 스타일은 보존한다', () => {
+test('배경색만 켜면 꺼 둔 글자색과 기존 서식을 지우고 다른 스타일은 보존한다', () => {
   const before = '<span style="color: #1c7ed6; text-align: center; border-bottom-width: 1px; border-style: none none solid"><strong><em>중요</em></strong></span>';
   const bg = { 'background-color': HL['background-color'] };
   const formats = { bold: false, italic: false };
   const on = toggleHighlight(before, bg, formats);
-  assert.strictEqual(on, '<span style="color: #1c7ed6; text-align: center; background-color: rgba(135, 131, 120, 0.15)">중요</span>');
-  assert.strictEqual(toggleHighlight(on, bg, formats), '<span style="color: #1c7ed6; text-align: center">중요</span>');
+  assert.strictEqual(on, '<span style="text-align: center; background-color: rgba(135, 131, 120, 0.15)">중요</span>');
+  assert.strictEqual(toggleHighlight(on, bg, formats), '<span style="text-align: center">중요</span>');
 });
 
 test('밑줄만 체크하면 기존 굵게·기울임을 지우고 밑줄만 남긴다', () => {
@@ -278,6 +278,42 @@ test('개별 밑줄 단축키용 toggleStyles는 굵게·기울임을 계속 보
   const before = '<strong><em>중요</em></strong>';
   const on = toggleStyles(before, UL);
   assert.strictEqual(on, '<span style="border-bottom-width: 1px; border-style: none none solid"><strong><em>중요</em></strong></span>');
+  assert.strictEqual(toggleStyles(on, UL), before);
+});
+
+test('굵게만 체크하면 기존 글자색·배경색을 모두 지우고 다음 입력에 굵게를 해제한다', () => {
+  const before = '<span style="color: #1c7ed6; background-color: #ffff00"><strong>중요</strong></span>';
+  const formats = { bold: true, italic: false };
+  assert.strictEqual(isHighlighted(before, {}, formats), false);
+  const on = toggleHighlight(before, {}, formats);
+  assert.strictEqual(on, '<strong>중요</strong>');
+  assert.strictEqual(toggleHighlight(on, {}, formats), '중요');
+});
+
+test('글자색만 체크하면 같은 글자색이 있어도 남은 배경색부터 지운다', () => {
+  const before = '<span style="color: #000000; background-color: #ffff00">중요</span>';
+  const styles = { color: '#000000' };
+  const formats = { bold: false, italic: false };
+  assert.strictEqual(isHighlighted(before, styles, formats), false);
+  const on = toggleHighlight(before, styles, formats);
+  assert.strictEqual(on, '<span style="color: #000000">중요</span>');
+  assert.strictEqual(toggleHighlight(on, styles, formats), '중요');
+});
+
+test('배경색만 체크하면 같은 배경색이 있어도 중첩된 글자색부터 지운다', () => {
+  const before = '<span style="background-color: #ffff00">앞<span style="color: #000000">중요</span>뒤</span>';
+  const styles = { 'background-color': '#ffff00' };
+  const formats = { bold: false, italic: false };
+  assert.strictEqual(isHighlighted(before, styles, formats), false);
+  const on = toggleHighlight(before, styles, formats);
+  assert.strictEqual(on, '<span style="background-color: #ffff00">앞중요뒤</span>');
+  assert.strictEqual(toggleHighlight(on, styles, formats), '앞중요뒤');
+});
+
+test('개별 밑줄 토글은 새 강조 규칙과 별개로 기존 글자색·배경색을 보존한다', () => {
+  const before = '<span style="color: #000000; background-color: #ffff00">중요</span>';
+  const on = toggleStyles(before, UL);
+  assert.match(on, /color: #000000; background-color: #ffff00; border-bottom-width:/);
   assert.strictEqual(toggleStyles(on, UL), before);
 });
 

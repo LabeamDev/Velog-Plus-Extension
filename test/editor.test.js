@@ -270,6 +270,20 @@ test('강조 옵션에서 끈 기울임·밑줄은 선택 안에서 지우고 �
   assert.equal(e.text(), wrap('앞') + '중요' + wrap('뒤'));
 });
 
+test('굵게만 체크한 부분 강조는 글자색·배경색을 선택 안에서만 지운다', () => {
+  const wrap = (s) => `<span style="color: #000000; background-color: #ffff00"><strong>${s}</strong></span>`;
+  const text = wrap('앞중요뒤');
+  const e = editor({ text });
+  e.highlight({}, undefined, { bold: true, italic: false });
+  const start = text.indexOf('중요');
+  e.select(start, start + 2);
+  e.keyMap['Cmd-E']();
+  assert.equal(e.text(), wrap('앞') + '<strong>중요</strong>' + wrap('뒤'));
+  assert.deepEqual(e.selected(), ['중요']);
+  e.keyMap['Cmd-E']();
+  assert.equal(e.text(), wrap('앞') + '중요' + wrap('뒤'));
+});
+
 test('강조 선택이 서식 경계에 걸쳐도 태그 짝이 맞는다', () => {
   const text = '<strong>앞굵</strong>보통';
   const e = editor({ text });
