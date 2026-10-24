@@ -233,19 +233,52 @@ test('강조 B·I·U만 켜면 색은 건드리지 않고 기존 색·다른 스
   assert.strictEqual(toggleHighlight(on, UL, BI), before);
 });
 
-test('강조 B·I: 기존 마크다운 굵게·기울임(** __ * _ ***)을 판정하고 켠 서식만 벗긴다', () => {
+test('강조 B·I: 기존 마크다운 굵게·기울임을 판정하고 체크한 서식만 남긴다', () => {
   assert.strictEqual(toggleHighlight('**굵게** __굵게__', {}, { bold: true }), '굵게 굵게');
   assert.strictEqual(toggleHighlight('*기울임* _기울임_', {}, { italic: true }), '기울임 기울임');
-  assert.strictEqual(toggleHighlight('***둘다***', {}, { bold: true }), '*둘다*');
-  assert.strictEqual(toggleHighlight('***둘다***', {}, { italic: true }), '**둘다**');
+  assert.strictEqual(toggleHighlight('***둘다***', {}, { bold: true }), '<strong>둘다</strong>');
+  assert.strictEqual(toggleHighlight('***둘다***', {}, { italic: true }), '<em>둘다</em>');
   assert.strictEqual(toggleHighlight('***둘다***', {}, BI), '둘다');
   assert.strictEqual(toggleHighlight('*바깥 **안쪽** 끝*', {}, BI), '<strong><em>바깥 안쪽 끝</em></strong>');
 });
 
-test('강조 B·I: 끈 서식은 보존하고 기울임만 토글한다', () => {
+test('강조 B·I: 체크 해제한 굵게를 지우고 기울임만 토글한다', () => {
   const on = toggleHighlight('a **b** c', {}, { italic: true });
-  assert.strictEqual(on, '<em>a **b** c</em>');
-  assert.strictEqual(toggleHighlight(on, {}, { italic: true }), 'a **b** c');
+  assert.strictEqual(on, '<em>a b c</em>');
+  assert.strictEqual(toggleHighlight(on, {}, { italic: true }), 'a b c');
+});
+
+test('기존 5개 강조에서 기울임·밑줄을 끄면 굵게와 색만 남기고 다음 입력에 해제한다', () => {
+  const before = toggleHighlight('중요', ALL5, BI);
+  const formats = { bold: true, italic: false };
+  assert.strictEqual(isHighlighted(before, HL, formats), false);
+  const on = toggleHighlight(before, HL, formats);
+  assert.strictEqual(on, '<span style="color: #eb5757; background-color: rgba(135, 131, 120, 0.15)"><strong>중요</strong></span>');
+  assert.strictEqual(toggleHighlight(on, HL, formats), '중요');
+});
+
+test('굵게·기울임·밑줄을 모두 끄면 기존 서식을 지우며 꺼 둔 색상과 다른 스타일은 보존한다', () => {
+  const before = '<span style="color: #1c7ed6; text-align: center; border-bottom-width: 1px; border-style: none none solid"><strong><em>중요</em></strong></span>';
+  const bg = { 'background-color': HL['background-color'] };
+  const formats = { bold: false, italic: false };
+  const on = toggleHighlight(before, bg, formats);
+  assert.strictEqual(on, '<span style="color: #1c7ed6; text-align: center; background-color: rgba(135, 131, 120, 0.15)">중요</span>');
+  assert.strictEqual(toggleHighlight(on, bg, formats), '<span style="color: #1c7ed6; text-align: center">중요</span>');
+});
+
+test('밑줄만 체크하면 기존 굵게·기울임을 지우고 밑줄만 남긴다', () => {
+  const before = '<span style="border-bottom-width: 1px; border-style: none none solid"><strong><em>중요</em></strong></span>';
+  const formats = { bold: false, italic: false };
+  const on = toggleHighlight(before, UL, formats);
+  assert.strictEqual(on, '<span style="border-bottom-width: 1px; border-style: none none solid">중요</span>');
+  assert.strictEqual(toggleHighlight(on, UL, formats), '중요');
+});
+
+test('개별 밑줄 단축키용 toggleStyles는 굵게·기울임을 계속 보존한다', () => {
+  const before = '<strong><em>중요</em></strong>';
+  const on = toggleStyles(before, UL);
+  assert.strictEqual(on, '<span style="border-bottom-width: 1px; border-style: none none solid"><strong><em>중요</em></strong></span>');
+  assert.strictEqual(toggleStyles(on, UL), before);
 });
 
 test('강조 B·I: 이스케이프·인라인 코드·링크 주소·단어 속 _ 는 서식 기호로 보지 않는다', () => {

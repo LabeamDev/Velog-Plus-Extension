@@ -247,12 +247,27 @@ test('강조 부분 선택은 기존 마크다운 굵게를 나눠 바깥 글자
     e.keyMap['Cmd-E']();
     assert.equal(e.text(), out);
   }
-  // 굵게를 끈 기울임 강조는 기존 굵게를 지우지 않고 선택 부분만 기울인다.
+  // 굵게를 끈 기울임 강조는 선택 부분의 굵게를 지우고 선택 밖은 보존한다.
   const e = editor({ text: '**앞중요뒤**' });
   e.highlight({}, undefined, { bold: false, italic: true });
   e.select(3, 5);
   e.keyMap['Cmd-E']();
-  assert.equal(e.text(), '**앞**<em>**중요**</em>**뒤**');
+  assert.equal(e.text(), '**앞**<em>중요</em>**뒤**');
+});
+
+test('강조 옵션에서 끈 기울임·밑줄은 선택 안에서 지우고 선택 밖은 보존한다', () => {
+  const beforeSpan = '<span style="color: #000000; border-bottom-width: 1px; border-style: none none solid">';
+  const wrap = (s) => `${beforeSpan}<strong><em>${s}</em></strong></span>`;
+  const text = wrap('앞중요뒤');
+  const e = editor({ text });
+  e.highlight({ color: '#000000' }, undefined, { bold: true, italic: false });
+  const start = text.indexOf('중요');
+  e.select(start, start + 2);
+  e.keyMap['Cmd-E']();
+  assert.equal(e.text(), wrap('앞') + '<span style="color: #000000"><strong>중요</strong></span>' + wrap('뒤'));
+  assert.deepEqual(e.selected(), ['중요']);
+  e.keyMap['Cmd-E']();
+  assert.equal(e.text(), wrap('앞') + '중요' + wrap('뒤'));
 });
 
 test('강조 선택이 서식 경계에 걸쳐도 태그 짝이 맞는다', () => {
